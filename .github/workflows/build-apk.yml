@@ -25,9 +25,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          npm install -g pnpm
-          pnpm install --no-frozen-lockfile --registry https://registry.npmmirror.com
+        run: npm install
 
       - name: Build Next.js static export
         run: |
