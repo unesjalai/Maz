@@ -1,81 +1,65 @@
-name: Build Android APK
+name: Debug Repository Structure
 
 on:
   push:
     branches: [main]
 
 jobs:
-  build:
+  debug:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '20'
     
-    - name: Clean up previous Android platform
+    - name: Show full repository structure
       run: |
-        echo "=== Cleaning up previous builds ==="
-        rm -rf android
-        rm -f capacitor.config.*
-        rm -rf .capacitor
+        echo "=== STEP 1: Current directory ==="
+        pwd
+        echo ""
         
-    - name: Install dependencies
-      run: |
-        npm install
-        npm install @capacitor/android@5.5.0 @capacitor/cli@5.5.0
+        echo "=== STEP 2: List all files in root ==="
+        ls -la
+        echo ""
         
-    - name: Build web app
-      run: npm run build
-    
-    - name: Create capacitor config
-      run: |
-        echo '{"appId":"com.royan.app","appName":"RoyanApp","webDir":"out"}' > capacitor.config.json
+        echo "=== STEP 3: List all directories in root ==="
+        ls -la */
+        echo ""
         
-    - name: Add Android platform
-      run: |
-        echo "=== Adding Android platform ==="
-        npx cap add android
+        echo "=== STEP 4: Search for package.json everywhere ==="
+        find . -name "package.json" -type f | while read file; do
+          echo "Found: $file"
+          echo "Directory: $(dirname $file)"
+          echo "Contents of that directory:"
+          ls -la $(dirname $file)
+          echo "---"
+        done
+        echo ""
         
-    - name: Fix Kotlin dependencies
-      run: |
-        echo "=== Fixing Kotlin dependency conflicts ==="
+        echo "=== STEP 5: Check if this is a Next.js app ==="
+        find . -name "next.config.js" -o -name "next.config.ts" 2>/dev/null || echo "No Next.js config found"
+        echo ""
         
-        # Add Kotlin version to root build.gradle
-        if [ -f "android/build.gradle" ]; then
-          sed -i '1i buildscript {\n    ext.kotlin_version = "1.8.22"\n}' android/build.gradle
-          
-          # Add Kotlin plugin dependency
-          sed -i '/classpath "com.android.tools.build:gradle:/a\        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"' android/build.gradle
-        fi
+        echo "=== STEP 6: Check if this is a React app (create-react-app) ==="
+        find . -name "craco.config.js" -o -name "react-app-env.d.ts" 2>/dev/null || echo "No CRA specific files found"
+        echo ""
         
-        # Fix duplicate Kotlin libraries in app build.gradle
-        if [ -f "android/app/build.gradle" ]; then
-          # Create the fix content
-          FIX_CONTENT='    configurations.all {\n        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"\n        exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"\n    }\n    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"'
-          
-          # Insert after dependencies {
-          sed -i "/dependencies {/a $FIX_CONTENT" android/app/build.gradle
-        fi
+        echo "=== STEP 7: Look for common build output directories ==="
+        for dir in "build" "dist" "out" ".next" "public"; do
+          if [ -d "$dir" ]; then
+            echo "Found $dir directory in root"
+          else
+            echo "No $dir directory in root"
+          fi
+        done
+        echo ""
         
-        echo "=== Updated build.gradle files ==="
-        head -20 android/build.gradle
-        echo "..."
-        tail -20 android/app/build.gradle
-    
-    - uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+        echo "=== STEP 8: Check for any JavaScript/TypeScript files ==="
+        echo "Top 20 JS/TS files found:"
+        find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -not -path "*/node_modules/*" | head -20
+        echo ""
         
-    - name: Build APK
-      run: |
-        echo "=== Building APK ==="
-        cd android
-        chmod +x gradlew
-        ./gradlew clean assembleDebug --stacktrace
-        
-    - uses: actions/upload-artifact@v4
-      with:
-        name: apk
-        path: android/app/build/outputs/apk/debug/*.apk
+        echo "=== STEP 9: Check package.json content if found ==="
+        find . -name "package.json" -type f | while read file; do
+          echo "Content of $file:"
+          cat "$file" | head -30
+          echo "---"
+        done
