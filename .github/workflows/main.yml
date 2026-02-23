@@ -47,17 +47,8 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Capacitor CLI
-        run: pnpm add -D @capacitor/cli
-
-      - name: Initialize Capacitor
-        run: |
-          npx cap init "My App" "com.myapp.mobile" --web-dir out
-
       - name: Add Android platform
-        run: |
-          pnpm add @capacitor/android
-          npx cap add android
+        run: npx cap add android
 
       - name: Sync Capacitor
         run: npx cap sync android
