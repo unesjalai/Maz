@@ -31,6 +31,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org
 
       - name: Build Next.js static export
         run: |
