@@ -1,0 +1,8 @@
+{
+  "appId": "com.maz.app",
+  "appName": "Maz",
+  "webDir": "out",
+  "server": {
+    "androidScheme": "https"
+  }
+}
