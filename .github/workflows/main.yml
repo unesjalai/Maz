@@ -1,50 +1,158 @@
-name: Debug Repository Structure - Extended
+name: Build Android APK
 
 on:
   push:
     branches: [main]
 
 jobs:
-  debug:
+  build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
     
-    - name: Check current branch
+    - name: Clean up previous Android platform
       run: |
-        echo "=== Current branch ==="
-        git branch --show-current
-        echo ""
+        echo "=== Cleaning up previous builds ==="
+        rm -rf android
+        rm -f capacitor.config.*
+        rm -rf .capacitor
         
-        echo "=== List all branches ==="
-        git branch -a
-        echo ""
-    
-    - name: Check .github folder contents
+    - name: Install dependencies
       run: |
-        echo "=== Contents of .github folder ==="
-        ls -la .github/
-        echo ""
+        npm install
+        npm install @capacitor/core@5.5.0 @capacitor/android@5.5.0 @capacitor/cli@5.5.0
         
-        echo "=== Contents of .github/workflows (if exists) ==="
-        ls -la .github/workflows/ 2>/dev/null || echo "No workflows folder"
-        echo ""
+    - name: Build web app
+      run: npm run build
     
-    - name: Check for any committed files
+    - name: Create capacitor config
       run: |
-        echo "=== List all files in repository (including hidden) ==="
-        git ls-files
-        echo ""
-        
-        echo "=== Check recent commits ==="
-        git log --oneline -5
-        echo ""
-    
-    - name: Check if this is a fresh repository
-      run: |
-        echo "=== Check if there are any files at all ==="
-        if [ $(git ls-files | wc -l) -eq 0 ]; then
-          echo "⚠️ WARNING: No files are committed to this repository!"
+        # Check what your actual build output directory is
+        if [ -d "dist" ]; then
+          WEB_DIR="dist"
+        elif [ -d "build" ]; then
+          WEB_DIR="build"
+        elif [ -d "out" ]; then
+          WEB_DIR="out"
         else
-          echo "✅ Found $(git ls-files | wc -l) committed files"
+          echo "Could not find build directory! Please check your build output"
+          exit 1
         fi
+        echo "{\"appId\":\"com.royan.app\",\"appName\":\"RoyanApp\",\"webDir\":\"$WEB_DIR\"}" > capacitor.config.json
+        cat capacitor.config.json
+        
+    - name: Add Android platform
+      run: |
+        echo "=== Adding Android platform ==="
+        npx cap add android
+        
+    - name: Fix Android build files
+      run: |
+        echo "=== Fixing Android configuration ==="
+        
+        # Update root build.gradle
+        cat > android/build.gradle << 'EOF'
+        buildscript {
+            ext.kotlin_version = '1.8.22'
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:8.0.2'
+                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+            }
+        }
+
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+
+        task clean(type: Delete) {
+            delete rootProject.buildDir
+        }
+        EOF
+        
+        # Update app/build.gradle
+        cat > android/app/build.gradle << 'EOF'
+        apply plugin: 'com.android.application'
+        apply plugin: 'kotlin-android'
+
+        android {
+            namespace 'com.royan.app'
+            compileSdk 33
+            
+            defaultConfig {
+                applicationId "com.royan.app"
+                minSdk 22
+                targetSdk 33
+                versionCode 1
+                versionName "1.0"
+                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+            }
+            
+            buildTypes {
+                release {
+                    minifyEnabled false
+                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                }
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+            kotlinOptions {
+                jvmTarget = '17'
+            }
+        }
+
+        repositories {
+            google()
+            mavenCentral()
+        }
+
+        dependencies {
+            implementation fileTree(dir: 'libs', include: ['*.jar'])
+            implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+            implementation 'androidx.core:core-ktx:1.9.0'
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.9.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+            
+            // Capacitor dependencies
+            implementation project(':capacitor-android')
+            testImplementation 'junit:junit:4.13.2'
+            androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+            androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+        }
+
+        apply from: 'capacitor.build.gradle'
+        EOF
+    
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Sync Capacitor
+      run: npx cap sync android
+        
+    - name: Build APK
+      run: |
+        echo "=== Building APK ==="
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleDebug --stacktrace
+        
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: error
