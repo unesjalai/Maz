@@ -1,4 +1,4 @@
-name: Debug Repository Structure
+name: Debug Repository Structure - Extended
 
 on:
   push:
@@ -10,56 +10,41 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Show full repository structure
+    - name: Check current branch
       run: |
-        echo "=== STEP 1: Current directory ==="
-        pwd
+        echo "=== Current branch ==="
+        git branch --show-current
         echo ""
         
-        echo "=== STEP 2: List all files in root ==="
-        ls -la
+        echo "=== List all branches ==="
+        git branch -a
+        echo ""
+    
+    - name: Check .github folder contents
+      run: |
+        echo "=== Contents of .github folder ==="
+        ls -la .github/
         echo ""
         
-        echo "=== STEP 3: List all directories in root ==="
-        ls -la */
+        echo "=== Contents of .github/workflows (if exists) ==="
+        ls -la .github/workflows/ 2>/dev/null || echo "No workflows folder"
+        echo ""
+    
+    - name: Check for any committed files
+      run: |
+        echo "=== List all files in repository (including hidden) ==="
+        git ls-files
         echo ""
         
-        echo "=== STEP 4: Search for package.json everywhere ==="
-        find . -name "package.json" -type f | while read file; do
-          echo "Found: $file"
-          echo "Directory: $(dirname $file)"
-          echo "Contents of that directory:"
-          ls -la $(dirname $file)
-          echo "---"
-        done
+        echo "=== Check recent commits ==="
+        git log --oneline -5
         echo ""
-        
-        echo "=== STEP 5: Check if this is a Next.js app ==="
-        find . -name "next.config.js" -o -name "next.config.ts" 2>/dev/null || echo "No Next.js config found"
-        echo ""
-        
-        echo "=== STEP 6: Check if this is a React app (create-react-app) ==="
-        find . -name "craco.config.js" -o -name "react-app-env.d.ts" 2>/dev/null || echo "No CRA specific files found"
-        echo ""
-        
-        echo "=== STEP 7: Look for common build output directories ==="
-        for dir in "build" "dist" "out" ".next" "public"; do
-          if [ -d "$dir" ]; then
-            echo "Found $dir directory in root"
-          else
-            echo "No $dir directory in root"
-          fi
-        done
-        echo ""
-        
-        echo "=== STEP 8: Check for any JavaScript/TypeScript files ==="
-        echo "Top 20 JS/TS files found:"
-        find . -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -not -path "*/node_modules/*" | head -20
-        echo ""
-        
-        echo "=== STEP 9: Check package.json content if found ==="
-        find . -name "package.json" -type f | while read file; do
-          echo "Content of $file:"
-          cat "$file" | head -30
-          echo "---"
-        done
+    
+    - name: Check if this is a fresh repository
+      run: |
+        echo "=== Check if there are any files at all ==="
+        if [ $(git ls-files | wc -l) -eq 0 ]; then
+          echo "⚠️ WARNING: No files are committed to this repository!"
+        else
+          echo "✅ Found $(git ls-files | wc -l) committed files"
+        fi
