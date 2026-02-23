@@ -2,157 +2,85 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    
-    - name: Clean up previous Android platform
-      run: |
-        echo "=== Cleaning up previous builds ==="
-        rm -rf android
-        rm -f capacitor.config.*
-        rm -rf .capacitor
-        
-    - name: Install dependencies
-      run: |
-        npm install
-        npm install @capacitor/core@5.5.0 @capacitor/android@5.5.0 @capacitor/cli@5.5.0
-        
-    - name: Build web app
-      run: npm run build
-    
-    - name: Create capacitor config
-      run: |
-        # Check what your actual build output directory is
-        if [ -d "dist" ]; then
-          WEB_DIR="dist"
-        elif [ -d "build" ]; then
-          WEB_DIR="build"
-        elif [ -d "out" ]; then
-          WEB_DIR="out"
-        else
-          echo "Could not find build directory! Please check your build output"
-          exit 1
-        fi
-        echo "{\"appId\":\"com.royan.app\",\"appName\":\"RoyanApp\",\"webDir\":\"$WEB_DIR\"}" > capacitor.config.json
-        cat capacitor.config.json
-        
-    - name: Add Android platform
-      run: |
-        echo "=== Adding Android platform ==="
-        npx cap add android
-        
-    - name: Fix Android build files
-      run: |
-        echo "=== Fixing Android configuration ==="
-        
-        # Update root build.gradle
-        cat > android/build.gradle << 'EOF'
-        buildscript {
-            ext.kotlin_version = '1.8.22'
-            repositories {
-                google()
-                mavenCentral()
-            }
-            dependencies {
-                classpath 'com.android.tools.build:gradle:8.0.2'
-                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-            }
-        }
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
-            }
-        }
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        task clean(type: Delete) {
-            delete rootProject.buildDir
-        }
-        EOF
-        
-        # Update app/build.gradle
-        cat > android/app/build.gradle << 'EOF'
-        apply plugin: 'com.android.application'
-        apply plugin: 'kotlin-android'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
-        android {
-            namespace 'com.royan.app'
-            compileSdk 33
-            
-            defaultConfig {
-                applicationId "com.royan.app"
-                minSdk 22
-                targetSdk 33
-                versionCode 1
-                versionName "1.0"
-                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-            }
-            
-            buildTypes {
-                release {
-                    minifyEnabled false
-                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                }
-            }
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_17
-                targetCompatibility JavaVersion.VERSION_17
-            }
-            kotlinOptions {
-                jvmTarget = '17'
-            }
-        }
+      - name: Install dependencies
+        run: pnpm install
 
-        repositories {
-            google()
-            mavenCentral()
-        }
+      - name: Build Next.js static export
+        run: |
+          pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
 
-        dependencies {
-            implementation fileTree(dir: 'libs', include: ['*.jar'])
-            implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-            implementation 'androidx.core:core-ktx:1.9.0'
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-            
-            // Capacitor dependencies
-            implementation project(':capacitor-android')
-            testImplementation 'junit:junit:4.13.2'
-            androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-            androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-        }
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-        apply from: 'capacitor.build.gradle'
-        EOF
-    
-    - uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-        
-    - name: Sync Capacitor
-      run: npx cap sync android
-        
-    - name: Build APK
-      run: |
-        echo "=== Building APK ==="
-        cd android
-        chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace
-        
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: android/app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: error
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Capacitor CLI
+        run: pnpm add -D @capacitor/cli
+
+      - name: Initialize Capacitor
+        run: |
+          npx cap init "My App" "com.myapp.mobile" --web-dir out
+
+      - name: Add Android platform
+        run: |
+          pnpm add @capacitor/android
+          npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Create Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release ${{ github.run_number }}
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
