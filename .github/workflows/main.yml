@@ -1,4 +1,4 @@
-name: Debug Repository Structure - Extended
+name: Debug Committed Files
 
 on:
   push:
@@ -10,41 +10,54 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Check current branch
+    - name: Show all committed files
       run: |
-        echo "=== Current branch ==="
-        git branch --show-current
-        echo ""
-        
-        echo "=== List all branches ==="
-        git branch -a
-        echo ""
-    
-    - name: Check .github folder contents
-      run: |
-        echo "=== Contents of .github folder ==="
-        ls -la .github/
-        echo ""
-        
-        echo "=== Contents of .github/workflows (if exists) ==="
-        ls -la .github/workflows/ 2>/dev/null || echo "No workflows folder"
-        echo ""
-    
-    - name: Check for any committed files
-      run: |
-        echo "=== List all files in repository (including hidden) ==="
+        echo "=== All files in this repository (committed) ==="
         git ls-files
         echo ""
         
-        echo "=== Check recent commits ==="
-        git log --oneline -5
+        echo "=== Show repository root structure ==="
+        ls -la
         echo ""
+        
+        echo "=== Check if package.json exists anywhere ==="
+        find . -name "package.json" -type f || echo "No package.json found"
+        echo ""
+        
+        echo "=== Show git status (what would be committed) ==="
+        git status
+        echo ""
+        
+        echo "=== Show recent commits and their files ==="
+        git show --name-only HEADname: Debug Committed Files
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
     
-    - name: Check if this is a fresh repository
+    - name: Show all committed files
       run: |
-        echo "=== Check if there are any files at all ==="
-        if [ $(git ls-files | wc -l) -eq 0 ]; then
-          echo "⚠️ WARNING: No files are committed to this repository!"
-        else
-          echo "✅ Found $(git ls-files | wc -l) committed files"
-        fi
+        echo "=== All files in this repository (committed) ==="
+        git ls-files
+        echo ""
+        
+        echo "=== Show repository root structure ==="
+        ls -la
+        echo ""
+        
+        echo "=== Check if package.json exists anywhere ==="
+        find . -name "package.json" -type f || echo "No package.json found"
+        echo ""
+        
+        echo "=== Show git status (what would be committed) ==="
+        git status
+        echo ""
+        
+        echo "=== Show recent commits and their files ==="
+        git show --name-only HEAD
